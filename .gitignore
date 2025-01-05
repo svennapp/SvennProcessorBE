@@ -1,0 +1,55 @@
+# Environment variables
+.env
+.flaskenv
+venv/
+env/
+.venv/
+ENV/
+
+# Database
+*.db
+app.db
+app_backup.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+app/logs/
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

@@ -1,0 +1,43 @@
+Web Project Directory Structure:
+
+|- SvennProcessor
+    |- .env
+    |- .flaskenv
+    |- app
+        |- api
+            |- errors.py
+            |- routes.py
+            |- __init__.py
+        |- jobs
+            |- common
+                |- base_processor.py
+                |- database_manager.py
+            |- scheduler.py
+            |- utils
+                |- logging_config.py
+            |- warehouse_scripts
+                |- byggmakker
+                    |- base_data.py
+                    |- prices.py
+                    |- retailer_data.py
+                    |- store_data.py
+                    |- __init__.py
+        |- logs
+            |- script_executions.log
+        |- models.py
+        |- __init__.py
+    |- app.db
+    |- app_backup.db
+    |- config.py
+    |- migrations
+        |- alembic.ini
+        |- env.py
+        |- README
+        |- script.py.mako
+        |- versions
+            |- 6aaecfa0b827_update_script_paths_to_warehouse_.py
+            |- 8d79800cd999_initial_migration.py
+    |- package-lock.json
+    |- package.json
+    |- requirements.txt
+    |- run.py
