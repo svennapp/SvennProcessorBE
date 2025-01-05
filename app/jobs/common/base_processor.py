@@ -36,7 +36,8 @@ class BaseProcessor(ABC):
             logger.removeHandler(handler)
 
         # Create formatters and handlers
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                                      '%Y-%m-%d %H:%M:%S')  # Removed microseconds from format
 
         # Console Handler
         console_handler = logging.StreamHandler()

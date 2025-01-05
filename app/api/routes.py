@@ -1,16 +1,18 @@
 # app/api/routes.py
-from datetime import datetime
+import os
+import re
+from datetime import datetime, timedelta
 from flask import jsonify, request
 from app import db
 from app.api import bp
 from app.models import Warehouse
-import os
 from app.models import Script
 from flask import current_app
 from app.jobs.scheduler import add_job, remove_job, execute_script
 from app.models import Job, JobExecution
 from app.jobs.scheduler import toggle_job
 from app.jobs.scheduler import update_job
+
 
 
 
@@ -203,6 +205,148 @@ def delete_script(id):
     db.session.commit()
 
     return '', 204
+
+
+@bp.route('/scripts/<int:script_id>/logs', methods=['GET'])
+def get_script_logs(script_id):
+    """Get logs for a specific script"""
+    try:
+        # Verify script exists
+        script = Script.query.get_or_404(script_id)
+        current_app.logger.info(f"Fetching logs for script: {script.name}")
+
+        def normalize_script_name(name):
+            """Normalize script name for comparison"""
+            # First, remove 'Processor' suffix if it exists
+            name = name.replace('Processor', '')
+
+            # Remove any leading/trailing dashes or spaces
+            name = name.strip('- ')
+
+            # Handle CamelCase by inserting underscores
+            name = re.sub('([a-z0-9])([A-Z])', r'\1_\2', name)
+
+            # Convert to lowercase and normalize spaces/underscores
+            name = name.lower().replace(' ', '_')
+
+            # Remove duplicate underscores and trim
+            name = re.sub('_+', '_', name).strip('_')
+
+            return name
+
+        # Get query parameters for filtering
+        hours = request.args.get('hours', type=int, default=24)
+        log_level = request.args.get('level', type=str)
+
+        # Calculate the time threshold
+        time_threshold = datetime.utcnow() - timedelta(hours=hours)
+
+        # Path to log file
+        log_file = os.path.join(current_app.root_path, 'logs', 'script_executions.log')
+
+        if not os.path.exists(log_file):
+            current_app.logger.error(f"Log file not found at: {log_file}")
+            return jsonify({'error': 'Log file not found'}), 404
+
+        # Normalize the script name we're looking for
+        script_name_normalized = normalize_script_name(script.name)
+        current_app.logger.info(f"Looking for logs matching normalized name: {script_name_normalized}")
+
+        # Read and parse log file
+        logs = []
+        current_log_entry = None
+        possible_matches = set()  # Keep track of all script names we see
+
+        with open(log_file, 'r', encoding='utf-8') as file:
+            for line_num, line in enumerate(file, 1):
+                try:
+                    line = line.strip()
+                    if not line:  # Skip empty lines
+                        continue
+
+                    # Try to identify if this is a new log entry
+                    if len(line) > 19:  # Minimum length for timestamp
+                        try:
+                            # Parse timestamp
+                            timestamp = datetime.strptime(line[:19], '%Y-%m-%d %H:%M:%S')
+
+                            # If we have a previous entry, save it
+                            if current_log_entry:
+                                logs.append(current_log_entry)
+
+                            # Parse new log entry
+                            remainder = line[20:].strip()  # Get everything after timestamp
+                            parts = remainder.split(' - ', 2)  # Split into max 3 parts
+
+                            if len(parts) >= 2:  # We need at least script_name and level
+                                log_script_name = parts[0].strip('- ')  # Remove any leading/trailing dashes
+                                level = parts[1].strip()
+                                message = parts[2].strip() if len(parts) > 2 else ""
+
+                                # Keep track of original script names for debugging
+                                possible_matches.add(log_script_name)
+
+                                # Normalize the script name from logs for comparison
+                                log_script_normalized = normalize_script_name(log_script_name)
+
+                                # Debug first few entries
+                                if line_num <= 5:
+                                    current_app.logger.debug(
+                                        f"Line {line_num}:\n"
+                                        f"  Original log name: '{log_script_name}'\n"
+                                        f"  Normalized log name: '{log_script_normalized}'\n"
+                                        f"  Looking for: '{script_name_normalized}'\n"
+                                        f"  Match? {script_name_normalized == log_script_normalized}"
+                                    )
+
+                                # Check for match
+                                if script_name_normalized == log_script_normalized:
+                                    current_log_entry = {
+                                        'timestamp': timestamp.isoformat(),
+                                        'level': level,
+                                        'message': message
+                                    }
+                                else:
+                                    current_log_entry = None
+                            else:
+                                current_log_entry = None
+                        except ValueError:
+                            # Not a timestamp line, append to current message if exists
+                            if current_log_entry:
+                                current_log_entry['message'] += '\n' + line
+                    elif current_log_entry:
+                        # Append this line to the current message
+                        current_log_entry['message'] += '\n' + line
+
+                except Exception as e:
+                    current_app.logger.error(f"Error parsing line {line_num}: {str(e)}")
+                    continue
+
+        # Add the last log entry if exists
+        if current_log_entry:
+            logs.append(current_log_entry)
+
+        # Filter logs by time threshold
+        logs = [log for log in logs if datetime.fromisoformat(log['timestamp']) >= time_threshold]
+
+        # Filter by log level if specified
+        if log_level:
+            logs = [log for log in logs if log['level'].upper() == log_level.upper()]
+
+        current_app.logger.info(f"Found {len(logs)} log entries for script {script.name}")
+        current_app.logger.info(f"All script names found in logs (before normalization): {sorted(possible_matches)}")
+
+        if logs:
+            current_app.logger.info(f"Sample log entry: {logs[0]}")
+
+        # Sort logs by timestamp (newest first)
+        logs.sort(key=lambda x: x['timestamp'], reverse=True)
+
+        return jsonify(logs)
+
+    except Exception as e:
+        current_app.logger.error(f"Error fetching logs: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 
 # Error handlers
